@@ -24,6 +24,28 @@ into a unified embedded framework optimized for:
 
 # Intellectual Property
 
+## Patent Filing
+
+This repository is associated with an independently authored Indian utility patent related to embedded multi-utility telemetry and anomaly detection architectures.
+
+Patent Status: Request for Examination (RQ) Filed
+Patent Type: Indian Utility Patent
+
+The patent focuses on:
+
+* AI-enabled utility monitoring
+* Embedded edge analytics
+* Mixed-signal sensing architectures
+* Local anomaly detection
+* Resilient telemetry persistence
+* Smart-city infrastructure deployment
+
+This repository documents the research, embedded architecture, and implementation concepts associated with the patented system.
+
+---
+
+# Intellectual Property
+
 Indian Utility Patent Filed
 Status: Request for Examination (RQ) Filed
 
