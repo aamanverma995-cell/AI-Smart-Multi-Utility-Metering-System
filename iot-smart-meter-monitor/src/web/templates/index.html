@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Meter Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; }
+    header { background: #1a1d27; padding: 1rem 2rem; border-bottom: 1px solid #2d3045; }
+    header h1 { font-size: 1.4rem; font-weight: 600; color: #7eb6ff; }
+    header small { color: #888; font-size: 0.75rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; padding: 1.5rem 2rem; }
+    .card { background: #1a1d27; border-radius: 10px; padding: 1.2rem; border: 1px solid #2d3045; }
+    .card .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 0.4rem; }
+    .card .value { font-size: 2rem; font-weight: 700; }
+    .card .unit  { font-size: 0.9rem; color: #888; margin-left: 0.25rem; }
+    .card.alert-on { border-color: #ff4d4d; }
+    .card .badge { display: inline-block; font-size: 0.68rem; padding: 2px 8px; border-radius: 20px; margin-top: 0.4rem; }
+    .ok   { background: #1e4d2b; color: #4caf50; }
+    .warn { background: #4d2a1e; color: #ff6b35; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 0 2rem 2rem; }
+    @media(max-width:700px){ .charts{ grid-template-columns:1fr; } }
+    .chart-box { background: #1a1d27; border-radius: 10px; padding: 1.2rem; border: 1px solid #2d3045; }
+    .chart-box h3 { font-size: 0.85rem; color: #aaa; margin-bottom: 0.8rem; }
+    .status-bar { text-align: center; padding: 0.5rem; font-size: 0.75rem; color: #555; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Smart Meter Dashboard</h1>
+    <small id="last-update">Connecting…</small>
+  </header>
+
+  <!-- KPI cards -->
+  <div class="grid">
+    <div class="card" id="card-voltage">
+      <div class="label">Voltage</div>
+      <div><span class="value" id="v-voltage">--</span><span class="unit">V</span></div>
+    </div>
+    <div class="card" id="card-power">
+      <div class="label">Active Power</div>
+      <div><span class="value" id="v-power">--</span><span class="unit">W</span></div>
+    </div>
+    <div class="card" id="card-energy">
+      <div class="label">Energy Today</div>
+      <div><span class="value" id="v-energy">--</span><span class="unit">kWh</span></div>
+    </div>
+    <div class="card" id="card-pf">
+      <div class="label">Power Factor</div>
+      <div><span class="value" id="v-pf">--</span></div>
+    </div>
+    <div class="card" id="card-flow">
+      <div class="label">Water Flow</div>
+      <div><span class="value" id="v-flow">--</span><span class="unit">L/min</span></div>
+    </div>
+    <div class="card" id="card-litres">
+      <div class="label">Water Today</div>
+      <div><span class="value" id="v-litres">--</span><span class="unit">L</span></div>
+    </div>
+    <div class="card" id="card-gas">
+      <div class="label">Gas Sensor</div>
+      <div><span class="value" id="v-gas">--</span><span class="unit">%FSD</span></div>
+      <span class="badge ok" id="badge-gas">OK</span>
+    </div>
+    <div class="card" id="card-freq">
+      <div class="label">Frequency</div>
+      <div><span class="value" id="v-freq">--</span><span class="unit">Hz</span></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts">
+    <div class="chart-box">
+      <h3>Power (W) — last 50 samples</h3>
+      <canvas id="chart-power" height="120"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Water Flow (L/min) — last 50 samples</h3>
+      <canvas id="chart-water" height="120"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Voltage (V) — last 50 samples</h3>
+      <canvas id="chart-voltage" height="120"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Gas Sensor (%FSD) — last 50 samples</h3>
+      <canvas id="chart-gas" height="120"></canvas>
+    </div>
+  </div>
+
+  <div class="status-bar" id="status-bar">Auto-refreshes every 10 s</div>
+
+  <script>
+    function mkChart(id, label, color) {
+      const ctx = document.getElementById(id).getContext('2d');
+      return new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label, data: [], borderColor: color,
+          backgroundColor: color + '22', borderWidth: 2, pointRadius: 2, tension: 0.3 }] },
+        options: {
+          animation: false, responsive: true,
+          scales: {
+            x: { ticks: { color: '#666', maxTicksLimit: 8, maxRotation: 0 },
+                 grid: { color: '#2d3045' } },
+            y: { ticks: { color: '#666' }, grid: { color: '#2d3045' } }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    const charts = {
+      power:   mkChart('chart-power',   'W',      '#7eb6ff'),
+      water:   mkChart('chart-water',   'L/min',  '#4fc3f7'),
+      voltage: mkChart('chart-voltage', 'V',      '#aed581'),
+      gas:     mkChart('chart-gas',     '%FSD',   '#ff8a65'),
+    };
+
+    function push(chart, label, value, maxLen = 50) {
+      chart.data.labels.push(label);
+      chart.data.datasets[0].data.push(value);
+      if (chart.data.labels.length > maxLen) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      chart.update('none');
+    }
+
+    function set(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+    async function refresh() {
+      try {
+        const [latest, summary] = await Promise.all([
+          fetch('/api/latest').then(r => r.json()),
+          fetch('/api/summary').then(r => r.json()),
+        ]);
+
+        if (!latest.length) return;
+        const r = latest[0];  // Most recent reading
+        const ts = r.timestamp ? r.timestamp.substring(11, 19) : '--';
+
+        set('v-voltage', r.voltage_v?.toFixed(1) ?? '--');
+        set('v-power',   r.power_w?.toFixed(0)   ?? '--');
+        set('v-energy',  summary.energy_today_kwh?.toFixed(3) ?? '--');
+        set('v-pf',      r.power_factor?.toFixed(2) ?? '--');
+        set('v-flow',    r.flow_lpm?.toFixed(2)    ?? '--');
+        set('v-litres',  summary.water_today_litres?.toFixed(1) ?? '--');
+        set('v-gas',     r.gas_pct_fsd?.toFixed(1) ?? '--');
+        set('v-freq',    r.frequency_hz?.toFixed(1) ?? '--');
+        set('last-update', 'Last update: ' + ts + ' UTC');
+
+        const gasCard  = document.getElementById('card-gas');
+        const gasBadge = document.getElementById('badge-gas');
+        if (r.gas_alert) {
+          gasCard.classList.add('alert-on');
+          gasBadge.textContent = 'ALERT'; gasBadge.className = 'badge warn';
+        } else {
+          gasCard.classList.remove('alert-on');
+          gasBadge.textContent = 'OK'; gasBadge.className = 'badge ok';
+        }
+
+        // Feed charts with all new points (in time order)
+        latest.reverse().forEach(row => {
+          const t = (row.timestamp || '').substring(11, 19);
+          push(charts.power,   t, row.power_w);
+          push(charts.water,   t, row.flow_lpm);
+          push(charts.voltage, t, row.voltage_v);
+          push(charts.gas,     t, row.gas_pct_fsd);
+        });
+        document.getElementById('status-bar').textContent = 'Last refresh: ' + new Date().toLocaleTimeString();
+      } catch(e) {
+        document.getElementById('status-bar').textContent = 'Connection error — retrying…';
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>
